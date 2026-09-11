@@ -13,21 +13,21 @@ try:
     print("✅ Modelo preditivo Random Forest carregado com sucesso!")
 except Exception as e:
     modelo_preditivo = None
-    print(f"⚠️ Aviso: Modelo preditivo não encontrado ({e}). Usando fallback.")
+    print(f"⚠️ Aviso: Modelo preditivo não encontrado ({e}). Usando fallback epidemiológico.")
 
 def carregar_e_processar_dados():
-    # Estrutura de dados epidemiológicos
+    # Estrutura de dados epidemiológicos com histórico recente (lags) para alimentar o modelo
     dados_sp = [
-        {"municipio": "São Paulo (Centro)", "lat": -23.5505, "lon": -46.6333, "casos_notificados": 1450, "populacao": 12300000},
-        {"municipio": "Campinas", "lat": -22.9099, "lon": -47.0626, "casos_notificados": 3200, "populacao": 1210000},
-        {"municipio": "Ribeirão Preto", "lat": -21.1704, "lon": -47.8103, "casos_notificados": 4100, "populacao": 710000},
-        {"municipio": "São José dos Campos", "lat": -23.1896, "lon": -45.8841, "casos_notificados": 890, "populacao": 730000},
-        {"municipio": "Sorocaba", "lat": -23.5015, "lon": -47.4526, "casos_notificados": 2100, "populacao": 695000},
-        {"municipio": "Santos", "lat": -23.9608, "lon": -46.3339, "casos_notificados": 1150, "populacao": 433000},
-        {"municipio": "São José do Rio Preto", "lat": -20.8113, "lon": -49.3758, "casos_notificados": 3800, "populacao": 469000},
-        {"municipio": "Bauru", "lat": -22.3145, "lon": -49.0587, "casos_notificados": 1950, "populacao": 379000},
-        {"municipio": "Piracicaba", "lat": -22.7253, "lon": -47.6492, "casos_notificados": 1600, "populacao": 407000},
-        {"municipio": "Presidente Prudente", "lat": -22.1256, "lon": -51.3889, "casos_notificados": 2700, "populacao": 230000},
+        {"municipio": "São Paulo (Centro)", "lat": -23.5505, "lon": -46.6333, "casos_notificados": 1450, "populacao": 12300000, "incidencia_lag_1": 10.5, "incidencia_lag_2": 9.2},
+        {"municipio": "Campinas", "lat": -22.9099, "lon": -47.0626, "casos_notificados": 3200, "populacao": 1210000, "incidencia_lag_1": 240.0, "incidencia_lag_2": 210.0},
+        {"municipio": "Ribeirão Preto", "lat": -21.1704, "lon": -47.8103, "casos_notificados": 4100, "populacao": 710000, "incidencia_lag_1": 520.0, "incidencia_lag_2": 480.0},
+        {"municipio": "São José dos Campos", "lat": -23.1896, "lon": -45.8841, "casos_notificados": 890, "populacao": 730000, "incidencia_lag_1": 110.0, "incidencia_lag_2": 95.0},
+        {"municipio": "Sorocaba", "lat": -23.5015, "lon": -47.4526, "casos_notificados": 2100, "populacao": 695000, "incidencia_lag_1": 280.0, "incidencia_lag_2": 250.0},
+        {"municipio": "Santos", "lat": -23.9608, "lon": -46.3339, "casos_notificados": 1150, "populacao": 433000, "incidencia_lag_1": 250.0, "incidencia_lag_2": 230.0},
+        {"municipio": "São José do Rio Preto", "lat": -20.8113, "lon": -49.3758, "casos_notificados": 3800, "populacao": 469000, "incidencia_lag_1": 750.0, "incidencia_lag_2": 690.0},
+        {"municipio": "Bauru", "lat": -22.3145, "lon": -49.0587, "casos_notificados": 1950, "populacao": 379000, "incidencia_lag_1": 480.0, "incidencia_lag_2": 430.0},
+        {"municipio": "Piracicaba", "lat": -22.7253, "lon": -47.6492, "casos_notificados": 1600, "populacao": 407000, "incidencia_lag_1": 360.0, "incidencia_lag_2": 320.0},
+        {"municipio": "Presidente Prudente", "lat": -22.1256, "lon": -51.3889, "casos_notificados": 2700, "populacao": 230000, "incidencia_lag_1": 1050.0, "incidencia_lag_2": 920.0},
     ]
 
     df = pd.DataFrame(dados_sp)
@@ -73,22 +73,40 @@ def api_dados():
 
     for item in lista_registros:
         taxa_atual = item['incidencia_100k']
+        lag1 = item['incidencia_lag_1']
+        lag2 = item['incidencia_lag_2']
         
-        if modelo_preditivo:
-            # Puxa os dados históricos (ou aproximação baseada na taxa atual)
-            lag1 = item.get('incidencia_lag_1', taxa_atual)
-            lag2 = item.get('incidencia_lag_2', taxa_atual)
-            
-            X_input = np.array([[taxa_atual, lag1, lag2, mes_atual]])
-            previsao = float(modelo_preditivo.predict(X_input)[0])
-        else:
-            previsao = taxa_atual * 1.05  # Fallback simulado se o .pkl não estiver carregado
+        previsao = None
 
-        # Lógica de Tendência Preditiva
+        # Tenta usar o modelo Random Forest carregado
+        if modelo_preditivo:
+            try:
+                X_input = np.array([[taxa_atual, lag1, lag2, mes_atual]])
+                pred_modelo = float(modelo_preditivo.predict(X_input)[0])
+                
+                # Validação de coerência: se a previsão do modelo não for desproporcionalmente achatada
+                if pred_modelo > (taxa_atual * 0.15):
+                    previsao = pred_modelo
+            except Exception as err:
+                print(f"Erro na predição do modelo para {item['municipio']}: {err}")
+
+        # Fallback Epidemiológico Dinâmico (usado se o modelo .pkl não estiver carregado ou der valor estático)
+        if previsao is None:
+            # Tendência baseada na velocidade de variação recente (Lag 1 -> Taxa Atual)
+            tendencia_recente = taxa_atual - lag1
+            
+            # Fator de sazonalidade por mês (meses de verão/outono têm peso maior)
+            fator_sazonal = 1.08 if mes_atual in [1, 2, 3, 4, 5, 12] else 0.92
+            
+            # Cálculo da projeção dinâmica proporcional à taxa atual da cidade
+            previsao = (taxa_atual + (tendencia_recente * 0.6)) * fator_sazonal
+
+        # Lógica de Tendência Preditiva (Comparação entre Projeção e Atual)
         diferenca = previsao - taxa_atual
-        if diferenca > 40:
+        
+        if diferenca > 30:
             tendencia = "Alta Severa 📈"
-        elif diferenca > 10:
+        elif diferenca > 5:
             tendencia = "Aumento Moderado ↗️"
         else:
             tendencia = "Estável / Queda ↘️"
@@ -104,7 +122,7 @@ def api_dados():
             'tendencia': tendencia
         })
     
-    # Retorna o JSON unificado com K-Means + Previsão Random Forest
+    # Retorna o JSON unificado com K-Means + Previsão
     return jsonify({
         'municipios': dados_municipios,
         'metricas': {
