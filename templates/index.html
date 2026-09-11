@@ -54,13 +54,13 @@
                 
                 <!-- Campo de Busca por Município ou CEP -->
                 <div>
-                    <label for="campo-busca" class="text-xs text-gray-400 font-semibold block mb-1 uppercase">Localizar no Mapa</label>
+                    <label for="campo-busca" class="text-xs text-gray-400 font-semibold block mb-1 uppercase">Localizar no Mapa (CEP ou Cidade)</label>
                     <div class="flex space-x-2">
-                        <input type="text" id="campo-busca" placeholder="Digite o município ou CEP..." 
+                        <input type="text" id="campo-busca" placeholder="Ex: 01001-000 ou Campinas..." 
                                aria-describedby="msg-erro"
                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none">
-                        <button onclick="buscarLocalizacao()" class="bg-emerald-500 hover:bg-emerald-600 text-gray-900 font-bold px-4 py-2 rounded-lg text-sm transition">
-                            Buscar
+                        <button id="btn-buscar" onclick="buscarLocalizacao()" class="bg-emerald-500 hover:bg-emerald-600 text-gray-900 font-bold px-4 py-2 rounded-lg text-sm transition flex items-center gap-1">
+                            <span>Buscar</span>
                         </button>
                     </div>
                     <p id="msg-erro" class="text-xs text-red-400 mt-1 hidden" role="alert" aria-live="assertive"></p>
@@ -74,10 +74,10 @@
                     <span>📊 Abrir Dashboard Preditivo (ML)</span>
                 </button>
 
-                <!-- Cards de Métricas Consolidadas -->
-                <section aria-label="Métricas Gerais de Saúde" class="grid grid-cols-2 gap-3">
+                <!-- Cards de Métricas Consolidadas (SUS) -->
+                <section aria-label="Métricas Gerais de Saúde (SUS)" class="grid grid-cols-2 gap-3">
                     <div class="bg-gray-700/50 p-3 rounded-lg border border-gray-600">
-                        <span class="text-[10px] text-gray-400 uppercase font-semibold block">Total de Casos</span>
+                        <span class="text-[10px] text-gray-400 uppercase font-semibold block">Total de Casos (SUS)</span>
                         <p id="total-casos" class="text-xl font-bold text-emerald-400 mt-1">---</p>
                     </div>
                     <div class="bg-gray-700/50 p-3 rounded-lg border border-gray-600">
@@ -108,7 +108,7 @@
                 <!-- Legenda -->
                 <div class="bg-gray-700/50 p-3 rounded-lg border border-gray-600" aria-label="Legenda de Risco">
                     <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs text-gray-400 uppercase font-semibold">Legenda de Risco (K-Means)</span>
+                        <span class="text-xs text-gray-400 uppercase font-semibold">Legenda de Risco (SUS)</span>
                         <span id="total-municipios" class="text-xs text-emerald-400 font-bold">0 mun.</span>
                     </div>
                     <div class="flex items-center space-x-2 mt-1"><span class="text-xs">🔴 Alto Risco</span></div>
@@ -116,9 +116,9 @@
                     <div class="flex items-center space-x-2 mt-1"><span class="text-xs">🟢 Baixo Risco</span></div>
                 </div>
 
-                <!-- Tabela de Municípios -->
+                <!-- Tabela de Municípios (SUS Reais) -->
                 <section class="bg-gray-700/50 p-3 rounded-lg border border-gray-600" aria-label="Lista Interativa de Municípios">
-                    <span class="text-xs text-gray-400 uppercase font-semibold block mb-2">Lista de Municípios</span>
+                    <span class="text-xs text-gray-400 uppercase font-semibold block mb-2">Dados Oficiais do SUS</span>
                     <div class="max-h-40 overflow-y-auto custom-scroll pr-1">
                         <table class="w-full text-left text-xs text-gray-300" role="table">
                             <thead class="text-[10px] text-gray-400 uppercase bg-gray-800 sticky top-0">
@@ -156,7 +156,7 @@
                     <h2 class="text-xl font-bold text-emerald-400 flex items-center gap-2">
                         🔮 Projeções Preditivas (Random Forest)
                     </h2>
-                    <p class="text-xs text-gray-400">Análise e tendências para os próximos 30 dias de vigilância epidemiológica.</p>
+                    <p class="text-xs text-gray-400">Análise e tendências para os próximos 30 dias com base no modelo de Machine Learning.</p>
                 </div>
 
                 <!-- Controles de Tipo de Visualização (3 Abas) -->
@@ -223,7 +223,9 @@
         const simbolosRisco = { 'Alto': '🔴 Alto', 'Médio': '🟡 Médio', 'Baixo': '🟢 Baixo' };
 
         let marcadores = {};
-        let dadosGlobais = [];
+        let marcadorBusca = null; // Guardará a busca por CEP
+        let dadosSUS = [];       
+        let dadosML = [];        
         let chartInstance = null;
         let tipoGraficoAtual = 'barras';
 
@@ -244,21 +246,26 @@
         fetch('/api/dados')
             .then(res => res.json())
             .then(payload => {
-                dadosGlobais = payload.municipios;
-                const metricas = payload.metricas;
+                dadosSUS = payload.dados_sus || payload.municipios || [];
+                dadosML = payload.dados_treinamento || payload.municipios || [];
+                
+                const metricas = payload.metricas_sus || payload.metricas || {};
 
-                document.getElementById('total-casos').innerText = metricas.total_casos.toLocaleString('pt-BR');
-                document.getElementById('media-incidencia').innerText = metricas.media_incidencia + ' /100k';
-                document.getElementById('municipio-critico').innerText = metricas.municipio_critico.nome;
-                document.getElementById('taxa-critica').innerText = metricas.municipio_critico.incidencia + ' /100k';
-                document.getElementById('total-municipios').innerText = dadosGlobais.length + ' municípios';
+                if (metricas.total_casos !== undefined) {
+                    document.getElementById('total-casos').innerText = metricas.total_casos.toLocaleString('pt-BR');
+                    document.getElementById('media-incidencia').innerText = metricas.media_incidencia + ' /100k';
+                    document.getElementById('municipio-critico').innerText = metricas.municipio_critico.nome;
+                    document.getElementById('taxa-critica').innerText = metricas.municipio_critico.incidencia + ' /100k';
+                }
+                
+                document.getElementById('total-municipios').innerText = dadosSUS.length + ' municípios';
 
                 const corpoTabela = document.getElementById('corpo-tabela');
                 corpoTabela.innerHTML = '';
 
-                dadosGlobais.sort((a, b) => b.incidencia_100k - a.incidencia_100k);
+                dadosSUS.sort((a, b) => b.incidencia_100k - a.incidencia_100k);
 
-                dadosGlobais.forEach(item => {
+                dadosSUS.forEach(item => {
                     const cor = coresRisco[item.nivel_risco] || '#3b82f6';
 
                     let orientacaoPopup = item.nivel_risco === 'Alto' ?
@@ -272,12 +279,9 @@
                     .bindPopup(`
                         <div style="color: #000; font-family: sans-serif;">
                             <strong style="font-size: 14px">${item.municipio}</strong><br>
-                            <b>Casos Notificados:</b> ${item.casos_notificados.toLocaleString('pt-BR')}<br>
+                            <b>Casos Notificados (SUS):</b> ${item.casos_notificados ? item.casos_notificados.toLocaleString('pt-BR') : 'N/A'}<br>
                             <b>Incidência (100k hab):</b> ${item.incidencia_100k}<br>
                             <b>Nível de Risco:</b> <span style="color: ${cor}; font-weight: bold">${item.nivel_risco}</span><br>
-                            <hr style="margin: 4px 0;">
-                            <b>🔮 Previsão 30d:</b> ${item.incidencia_prevista_100k} /100k<br>
-                            <b>Tendência:</b> ${item.tendencia}
                             ${orientacaoPopup}
                         </div>
                     `);
@@ -333,7 +337,7 @@
         }
 
         function renderizarDashboardPreditivo() {
-            if (!dadosGlobais || dadosGlobais.length === 0) return;
+            if (!dadosML || dadosML.length === 0) return;
 
             const ctx = document.getElementById('graficoComparativo').getContext('2d');
             const tabelaCorpo = document.getElementById('tabela-preditiva-corpo');
@@ -342,13 +346,8 @@
             let contAlta = 0;
             let contEstavel = 0;
 
-            // Preenche a tabela e calcula KPIs
-            dadosGlobais.forEach(item => {
-                // Substitua esta linha:
-// const ehAlta = (item.tendencia || '').toLowerCase().includes('alta');
-
-// Por esta lógica dinâmica:
-const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
+            dadosML.forEach(item => {
+                const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
                 if (ehAlta) contAlta++;
                 else contEstavel++;
 
@@ -371,11 +370,10 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
                 `;
             });
 
-            // Atualiza cartões KPIs
             document.getElementById('kpi-alta').innerText = contAlta;
             document.getElementById('kpi-estavel').innerText = contEstavel;
             
-            const maisCritico = [...dadosGlobais].sort((a, b) => b.incidencia_prevista_100k - a.incidencia_prevista_100k)[0];
+            const maisCritico = [...dadosML].sort((a, b) => b.incidencia_prevista_100k - a.incidencia_prevista_100k)[0];
             if (maisCritico) {
                 document.getElementById('kpi-maior-risco').innerText = `${maisCritico.municipio} (${maisCritico.incidencia_prevista_100k})`;
             }
@@ -383,16 +381,16 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
             if (chartInstance) chartInstance.destroy();
 
             if (tipoGraficoAtual === 'barras') {
-                const nomes = dadosGlobais.map(d => d.municipio);
-                const atuais = dadosGlobais.map(d => d.incidencia_100k);
-                const previstas = dadosGlobais.map(d => d.incidencia_prevista_100k);
+                const nomes = dadosML.map(d => d.municipio);
+                const atuais = dadosML.map(d => d.incidencia_100k);
+                const previstas = dadosML.map(d => d.incidencia_prevista_100k);
 
                 chartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: nomes,
                         datasets: [
-                            { label: 'Incidência Atual (/100k)', data: atuais, backgroundColor: 'rgba(234, 179, 8, 0.75)', borderColor: '#eab308', borderWidth: 1 },
+                            { label: 'Incidência de Treino (/100k)', data: atuais, backgroundColor: 'rgba(234, 179, 8, 0.75)', borderColor: '#eab308', borderWidth: 1 },
                             { label: 'Projeção 30d (/100k)', data: previstas, backgroundColor: 'rgba(16, 185, 129, 0.75)', borderColor: '#10b981', borderWidth: 1 }
                         ]
                     },
@@ -428,7 +426,7 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
                 });
 
             } else if (tipoGraficoAtual === 'linha') {
-                const top3 = [...dadosGlobais].sort((a, b) => b.incidencia_100k - a.incidencia_100k).slice(0, 3);
+                const top3 = [...dadosML].sort((a, b) => b.incidencia_100k - a.incidencia_100k).slice(0, 3);
                 const cores = ['#ef4444', '#f59e0b', '#10b981'];
 
                 const datasetsLinha = top3.map((mun, idx) => ({
@@ -472,15 +470,22 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
             return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals);
         }
 
-        // Busca por Município ou CEP
+        // BUSCA HÍBRIDA (BANCO LOCAL + VIACEP + NOMINATIM OPENSTREETMAP)
         async function buscarLocalizacao() {
             const termo = document.getElementById('campo-busca').value.trim();
             const msgErro = document.getElementById('msg-erro');
+            const btnBuscar = document.getElementById('btn-buscar');
+            
             msgErro.classList.add('hidden');
 
             if (!termo) return;
 
+            btnBuscar.innerText = "Buscando...";
+            btnBuscar.disabled = true;
+
             const termoLimpo = termo.toLowerCase();
+
+            // 1. Procura primeiro na lista cadastrada do SUS
             const encontradoKey = Object.keys(marcadores).find(nome => nome.includes(termoLimpo));
 
             if (encontradoKey) {
@@ -488,9 +493,12 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
                 map.setView(marker.getLatLng(), 11);
                 marker.openPopup();
                 anunciarParaLeitor(`Localizado ${encontradoKey} no mapa.`);
+                btnBuscar.innerText = "Buscar";
+                btnBuscar.disabled = false;
                 return;
             }
 
+            // 2. Se for formato CEP (contém dígitos)
             const cepLimpo = termo.replace(/\D/g, '');
             if (cepLimpo.length === 8) {
                 try {
@@ -501,20 +509,55 @@ const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
                         const cidadeCep = data.localidade.toLowerCase();
                         const encontradoCep = Object.keys(marcadores).find(nome => nome.includes(cidadeCep));
 
+                        // Se a cidade do CEP existe na lista de monitoramento do SUS
                         if (encontradoCep) {
                             const marker = marcadores[encontradoCep];
                             map.setView(marker.getLatLng(), 11);
                             marker.openPopup();
-                            anunciarParaLeitor(`CEP localizado em ${cidadeCep}. Centralizando mapa.`);
+                            anunciarParaLeitor(`CEP ${cepLimpo} localizado em ${data.localidade}.`);
+                            btnBuscar.innerText = "Buscar";
+                            btnBuscar.disabled = false;
+                            return;
+                        } 
+                        
+                        // Caso seja um CEP válido de uma cidade fora do banco SUS, busca latitude/longitude via Nominatim
+                        const enderecoCompleto = `${data.logradouro || ''}, ${data.bairro || ''}, ${data.localidade} - ${data.uf}, Brasil`;
+                        const resGeocode = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto)}`);
+                        const geoData = await resGeocode.json();
+
+                        if (geoData && geoData.length > 0) {
+                            const lat = parseFloat(geoData[0].lat);
+                            const lon = parseFloat(geoData[0].lon);
+
+                            if (marcadorBusca) map.removeLayer(marcadorBusca);
+
+                            marcadorBusca = L.marker([lat, lon]).addTo(map)
+                                .bindPopup(`
+                                    <div style="color: #000;">
+                                        <strong>📍 Localização Localizada por CEP</strong><br>
+                                        ${data.logradouro ? data.logradouro + '<br>' : ''}
+                                        ${data.bairro ? data.bairro + ' - ' : ''}${data.localidade}/${data.uf}<br>
+                                        <small class="text-gray-600">Este município não faz parte da amostragem crítica inicial.</small>
+                                    </div>
+                                `).openPopup();
+
+                            map.setView([lat, lon], 13);
+                            anunciarParaLeitor(`Endereço localizado: ${data.localidade}.`);
+                            btnBuscar.innerText = "Buscar";
+                            btnBuscar.disabled = false;
                             return;
                         }
                     }
                 } catch (e) { console.error("Erro na busca por CEP", e); }
             }
 
-            msgErro.innerText = "Município ou CEP não encontrado no monitoramento.";
+            // 3. Fallback: Se não encontrou nem no banco local nem pelo ViaCEP
+            msgErro.innerText = "Município ou CEP não localizado na base.";
             msgErro.classList.remove('hidden');
-            anunciarParaLeitor("Município ou CEP não encontrado no monitoramento.");
+            anunciarParaLeitor("Município ou CEP não localizado.");
+            
+            btnBuscar.innerText = "Buscar";
+            btnBuscar.disabled = false;
         }
 
         document.getElementById('campo-busca').addEventListener('keypress', function(e) {
