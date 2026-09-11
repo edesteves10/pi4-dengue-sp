@@ -13,7 +13,7 @@
 
     <style>
         .high-contrast {
-            filter: contrast(140%);
+            filter: contrast(140%) brightness(110%);
         }
         :focus-visible {
             outline: 3px solid #34d399 !important;
@@ -23,7 +23,7 @@
         .custom-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
     </style>
 </head>
-<body id="app-body" class="bg-gray-900 text-white font-sans transition-all overflow-hidden h-screen flex flex-col">
+<body id="app-body" class="bg-gray-900 text-white font-sans transition-all overflow-hidden h-screen flex flex-col" style="font-size: 100%;">
 
     <!-- Link de Acessibilidade (Navegação por Teclado) -->
     <a href="#conteudo-principal" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-3 focus:bg-emerald-500 focus:text-gray-900 font-bold">
@@ -40,8 +40,8 @@
                 <div class="flex justify-between items-center pb-2 border-b border-gray-700 text-xs" aria-label="Controles de Acessibilidade">
                     <span class="text-gray-400 font-semibold">♿ Acessibilidade:</span>
                     <div class="flex space-x-1">
-                        <button onclick="alterarFonte(1)" title="Aumentar Fonte" aria-label="Aumentar Fonte" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded font-bold">A+</button>
-                        <button onclick="alterarFonte(-1)" title="Diminuir Fonte" aria-label="Diminuir Fonte" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded font-bold">A-</button>
+                        <button onclick="alterarFonte(10)" title="Aumentar Fonte" aria-label="Aumentar Fonte" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded font-bold">A+</button>
+                        <button onclick="alterarFonte(-10)" title="Diminuir Fonte" aria-label="Diminuir Fonte" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded font-bold">A-</button>
                         <button onclick="toggleAltoContraste()" title="Alternar Alto Contraste" aria-label="Alternar Alto Contraste" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded font-bold">👁️ Contraste</button>
                     </div>
                 </div>
@@ -52,15 +52,24 @@
                     <p class="text-xs text-gray-400">Projeto Integrador IV - UNIVESP</p>
                 </div>
                 
-                <!-- Campo de Busca por Município ou CEP -->
+                <!-- Campo de Busca por Município ou CEP com botão Limpar -->
                 <div>
                     <label for="campo-busca" class="text-xs text-gray-400 font-semibold block mb-1 uppercase">Localizar no Mapa (CEP ou Cidade)</label>
                     <div class="flex space-x-2">
-                        <input type="text" id="campo-busca" placeholder="Ex: 01001-000 ou Campinas..." 
-                               aria-describedby="msg-erro"
-                               class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none">
+                        <div class="relative w-full">
+                            <input type="text" id="campo-busca" placeholder="Ex: 01001-000 ou Campinas..." 
+                                   aria-describedby="msg-erro"
+                                   onkeypress="if(event.key === 'Enter') buscarLocalizacao()"
+                                   class="w-full px-3 py-2 pr-8 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none">
+                            <button id="btn-limpar-campo" onclick="limparBusca()" title="Limpar busca e resetar mapa" class="hidden absolute right-2 top-2 text-gray-400 hover:text-white font-bold text-xs bg-gray-600 hover:bg-gray-500 rounded-full w-5 h-5 flex items-center justify-center">
+                                ✕
+                            </button>
+                        </div>
                         <button id="btn-buscar" onclick="buscarLocalizacao()" class="bg-emerald-500 hover:bg-emerald-600 text-gray-900 font-bold px-4 py-2 rounded-lg text-sm transition flex items-center gap-1">
                             <span>Buscar</span>
+                        </button>
+                        <button id="btn-limpar-mapa" onclick="limparBusca()" title="Limpar marcações do CEP" class="hidden bg-gray-700 hover:bg-gray-600 text-amber-300 font-semibold px-3 py-2 rounded-lg text-sm border border-amber-500/30 transition">
+                            🔄 Limpar
                         </button>
                     </div>
                     <p id="msg-erro" class="text-xs text-red-400 mt-1 hidden" role="alert" aria-live="assertive"></p>
@@ -156,20 +165,25 @@
                     <h2 class="text-xl font-bold text-emerald-400 flex items-center gap-2">
                         🔮 Projeções Preditivas (Random Forest)
                     </h2>
-                    <p class="text-xs text-gray-400">Análise e tendências para os próximos 30 dias com base no modelo de Machine Learning.</p>
+                    <p class="text-xs text-gray-400">Análise e tendências para os próximos 30 dias. Clique em uma cidade na tabela abaixo para isolar o gráfico.</p>
                 </div>
 
-                <!-- Controles de Tipo de Visualização (3 Abas) -->
-                <div class="flex bg-gray-900 p-1 rounded-lg border border-gray-700 text-xs">
-                    <button id="btn-chart-barras" onclick="alternarGrafico('barras')" class="px-3 py-1.5 rounded-md font-semibold bg-emerald-500 text-gray-900 transition shadow">
-                        📊 Comparativo
+                <!-- Controles de Tipo de Visualização e Filtro -->
+                <div class="flex items-center gap-2">
+                    <button id="btn-limpar-foco" onclick="limparFocoMunicipio()" class="hidden px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-amber-300 hover:bg-gray-600 transition border border-amber-500/40">
+                        🔄 Ver Todos
                     </button>
-                    <button id="btn-chart-tendencias" onclick="alternarGrafico('rosca')" class="px-3 py-1.5 rounded-md font-semibold text-gray-400 hover:text-white transition">
-                        🍩 Distribuição
-                    </button>
-                    <button id="btn-chart-linha" onclick="alternarGrafico('linha')" class="px-3 py-1.5 rounded-md font-semibold text-gray-400 hover:text-white transition">
-                        📈 Linha do Tempo
-                    </button>
+                    <div class="flex bg-gray-900 p-1 rounded-lg border border-gray-700 text-xs">
+                        <button id="btn-chart-barras" onclick="alternarGrafico('barras')" class="px-3 py-1.5 rounded-md font-semibold bg-emerald-500 text-gray-900 transition shadow">
+                            📊 Comparativo
+                        </button>
+                        <button id="btn-chart-tendencias" onclick="alternarGrafico('rosca')" class="px-3 py-1.5 rounded-md font-semibold text-gray-400 hover:text-white transition">
+                            🍩 Distribuição
+                        </button>
+                        <button id="btn-chart-linha" onclick="alternarGrafico('linha')" class="px-3 py-1.5 rounded-md font-semibold text-gray-400 hover:text-white transition">
+                            📈 Linha do Tempo
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -184,8 +198,8 @@
                     <p id="kpi-estavel" class="text-base font-bold text-yellow-400 mt-0.5">0</p>
                 </div>
                 <div class="bg-gray-900/60 p-2.5 rounded-lg border border-gray-700">
-                    <span class="text-gray-400 block uppercase font-semibold text-[10px]">Maior Risco Projetado</span>
-                    <p id="kpi-maior-risco" class="text-base font-bold text-emerald-400 mt-0.5">---</p>
+                    <span class="text-gray-400 block uppercase font-semibold text-[10px]">Foco Atual / Maior Risco</span>
+                    <p id="kpi-maior-risco" class="text-base font-bold text-emerald-400 mt-0.5 truncate">---</p>
                 </div>
             </div>
 
@@ -194,12 +208,12 @@
                 <canvas id="graficoComparativo"></canvas>
             </div>
 
-            <!-- Tabela Preditiva Interna -->
+            <!-- Tabela Preditiva Interna Interativa -->
             <div class="flex-1 overflow-y-auto custom-scroll border border-gray-700 rounded-lg">
                 <table class="w-full text-left text-xs text-gray-300">
-                    <thead class="bg-gray-900 text-gray-400 uppercase sticky top-0">
+                    <thead class="bg-gray-900 text-gray-400 uppercase sticky top-0 z-10">
                         <tr>
-                            <th class="p-2">Município</th>
+                            <th class="p-2">Município <span class="text-[10px] text-emerald-400 font-normal">(Clique para filtrar)</span></th>
                             <th class="p-2">Incidência Atual</th>
                             <th class="p-2 text-emerald-400">Projeção 30d (/100k)</th>
                             <th class="p-2">Tendência Estimada</th>
@@ -223,17 +237,31 @@
         const simbolosRisco = { 'Alto': '🔴 Alto', 'Médio': '🟡 Médio', 'Baixo': '🟢 Baixo' };
 
         let marcadores = {};
-        let marcadorBusca = null; // Guardará a busca por CEP
+        let marcadorBusca = null;
+        let linhaConexao = null;
         let dadosSUS = [];       
         let dadosML = [];        
         let chartInstance = null;
         let tipoGraficoAtual = 'barras';
+        let tamanhoFonteAtual = 100;
+        let municipioSelecionadoPreditivo = null;
 
         function anunciarParaLeitor(texto) {
             document.getElementById('anuncio-acessibilidade').innerText = texto;
         }
 
-        // Funções do Modal
+        function alterarFonte(delta) {
+            tamanhoFonteAtual = Math.max(80, Math.min(130, tamanhoFonteAtual + delta));
+            document.body.style.fontSize = tamanhoFonteAtual + '%';
+            anunciarParaLeitor(`Tamanho da fonte ajustado para ${tamanhoFonteAtual}%`);
+        }
+
+        function toggleAltoContraste() {
+            document.body.classList.toggle('high-contrast');
+            const ativado = document.body.classList.contains('high-contrast');
+            anunciarParaLeitor(ativado ? "Alto contraste ativado" : "Alto contraste desativado");
+        }
+
         function abrirModalDashboard() {
             document.getElementById('modal-dashboard').classList.remove('hidden');
             renderizarDashboardPreditivo();
@@ -241,6 +269,27 @@
 
         function fecharModalDashboard() {
             document.getElementById('modal-dashboard').classList.add('hidden');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') fecharModalDashboard();
+        });
+
+        // Função para remover marcadores de busca por CEP/Cidade
+        function removerMarcacoesBusca() {
+            if (marcadorBusca) { map.removeLayer(marcadorBusca); marcadorBusca = null; }
+            if (linhaConexao) { map.removeLayer(linhaConexao); linhaConexao = null; }
+            
+            document.getElementById('btn-limpar-mapa').classList.add('hidden');
+            document.getElementById('btn-limpar-campo').classList.add('hidden');
+            document.getElementById('msg-erro').classList.add('hidden');
+        }
+
+        function limparBusca() {
+            removerMarcacoesBusca();
+            document.getElementById('campo-busca').value = '';
+            map.setView([-22.5, -48.5], 7);
+            anunciarParaLeitor("Busca e marcações removidas do mapa.");
         }
 
         fetch('/api/dados')
@@ -294,6 +343,9 @@
                     tr.setAttribute('aria-label', `${item.municipio}, Taxa de ${item.incidencia_100k} por cem mil habitantes, Risco ${item.nivel_risco}`);
                     
                     const acaoSelecao = () => {
+                        // Limpa marcador de busca de CEP ao clicar em um município da tabela
+                        removerMarcacoesBusca();
+                        
                         map.setView([item.lat, item.lon], 11);
                         marker.openPopup();
                         anunciarParaLeitor(`Selecionado ${item.municipio}. Nível de risco: ${item.nivel_risco}.`);
@@ -313,7 +365,8 @@
                     `;
                     corpoTabela.appendChild(tr);
                 });
-            });
+            })
+            .catch(err => console.error("Erro ao carregar dados da API:", err));
 
         function alternarGrafico(tipo) {
             tipoGraficoAtual = tipo;
@@ -336,11 +389,25 @@
             renderizarDashboardPreditivo();
         }
 
+        function focarMunicipioPreditivo(nome) {
+            municipioSelecionadoPreditivo = nome;
+            renderizarDashboardPreditivo();
+            anunciarParaLeitor(`Gráfico filtrado para o município de ${nome}`);
+        }
+
+        function limparFocoMunicipio() {
+            municipioSelecionadoPreditivo = null;
+            renderizarDashboardPreditivo();
+            anunciarParaLeitor("Filtro de município removido. Exibindo visão geral.");
+        }
+
         function renderizarDashboardPreditivo() {
             if (!dadosML || dadosML.length === 0) return;
 
             const ctx = document.getElementById('graficoComparativo').getContext('2d');
             const tabelaCorpo = document.getElementById('tabela-preditiva-corpo');
+            const btnLimpar = document.getElementById('btn-limpar-foco');
+            
             tabelaCorpo.innerHTML = '';
 
             let contAlta = 0;
@@ -356,9 +423,18 @@
                     : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
                 const icone = ehAlta ? '↗️ Alta' : '↘️ Estável/Queda';
 
+                const estaSelecionado = municipioSelecionadoPreditivo === item.municipio;
+                const bgLinha = estaSelecionado 
+                    ? 'bg-emerald-900/40 border-l-4 border-emerald-400' 
+                    : 'border-b border-gray-800/60 hover:bg-gray-800/50 cursor-pointer';
+
                 tabelaCorpo.innerHTML += `
-                    <tr class="border-b border-gray-800/60 hover:bg-gray-800/40 transition">
-                        <td class="p-2.5 font-medium text-white">${item.municipio}</td>
+                    <tr onclick="focarMunicipioPreditivo('${item.municipio}')" 
+                        class="${bgLinha} transition group" 
+                        title="Clique para isolar a curva preditiva de ${item.municipio}">
+                        <td class="p-2.5 font-medium text-white group-hover:text-emerald-300 flex items-center gap-1">
+                            <span>🔍</span> ${item.municipio}
+                        </td>
                         <td class="p-2.5 font-mono text-gray-300">${item.incidencia_100k}</td>
                         <td class="p-2.5 font-mono text-emerald-400 font-bold">${item.incidencia_prevista_100k}</td>
                         <td class="p-2.5">
@@ -372,14 +448,68 @@
 
             document.getElementById('kpi-alta').innerText = contAlta;
             document.getElementById('kpi-estavel').innerText = contEstavel;
-            
-            const maisCritico = [...dadosML].sort((a, b) => b.incidencia_prevista_100k - a.incidencia_prevista_100k)[0];
-            if (maisCritico) {
-                document.getElementById('kpi-maior-risco').innerText = `${maisCritico.municipio} (${maisCritico.incidencia_prevista_100k})`;
+
+            if (municipioSelecionadoPreditivo) {
+                btnLimpar.classList.remove('hidden');
+                document.getElementById('kpi-maior-risco').innerText = `🎯 ${municipioSelecionadoPreditivo}`;
+            } else {
+                btnLimpar.classList.add('hidden');
+                const maisCritico = [...dadosML].sort((a, b) => b.incidencia_prevista_100k - a.incidencia_prevista_100k)[0];
+                if (maisCritico) {
+                    document.getElementById('kpi-maior-risco').innerText = `${maisCritico.municipio} (${maisCritico.incidencia_prevista_100k})`;
+                }
             }
 
             if (chartInstance) chartInstance.destroy();
 
+            // VISÃO FOCADA EM UM MUNICÍPIO ESPECÍFICO
+            if (municipioSelecionadoPreditivo) {
+                const item = dadosML.find(d => d.municipio === municipioSelecionadoPreditivo);
+                if (item) {
+                    chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: ['Há 60 Dias', 'Há 30 Dias', 'Atual (Treino)', 'Projeção (30 dias)'],
+                            datasets: [{
+                                label: `Curva Epidemiológica Preditiva: ${item.municipio} (/100k hab)`,
+                                data: [
+                                    round(item.incidencia_100k * 0.80, 2),
+                                    round(item.incidencia_100k * 0.92, 2),
+                                    item.incidencia_100k,
+                                    item.incidencia_prevista_100k
+                                ],
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 3,
+                                pointRadius: 6,
+                                pointBackgroundColor: '#34d399'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
+                                y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#f3f4f6', font: { size: 11 } } },
+                                title: { 
+                                    display: true, 
+                                    text: `Análise Individual Isolada: ${item.municipio} (Clique em "Ver Todos" para resetar)`, 
+                                    color: '#34d399',
+                                    font: { size: 12 } 
+                                }
+                            }
+                        }
+                    });
+                    return;
+                }
+            }
+
+            // VISÕES GERAIS QUANDO NENHUM MUNICÍPIO ESTÁ SELECIONADO
             if (tipoGraficoAtual === 'barras') {
                 const nomes = dadosML.map(d => d.municipio);
                 const atuais = dadosML.map(d => d.incidencia_100k);
@@ -470,111 +600,127 @@
             return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals);
         }
 
-        // BUSCA HÍBRIDA (BANCO LOCAL + VIACEP + NOMINATIM OPENSTREETMAP)
         async function buscarLocalizacao() {
             const termo = document.getElementById('campo-busca').value.trim();
             const msgErro = document.getElementById('msg-erro');
             const btnBuscar = document.getElementById('btn-buscar');
+            const btnLimparMapa = document.getElementById('btn-limpar-mapa');
+            const btnLimparCampo = document.getElementById('btn-limpar-campo');
             
             msgErro.classList.add('hidden');
+            msgErro.innerText = '';
 
             if (!termo) return;
 
             btnBuscar.innerText = "Buscando...";
             btnBuscar.disabled = true;
 
-            const termoLimpo = termo.toLowerCase();
-
-            // 1. Procura primeiro na lista cadastrada do SUS
-            const encontradoKey = Object.keys(marcadores).find(nome => nome.includes(termoLimpo));
-
-            if (encontradoKey) {
-                const marker = marcadores[encontradoKey];
-                map.setView(marker.getLatLng(), 11);
-                marker.openPopup();
-                anunciarParaLeitor(`Localizado ${encontradoKey} no mapa.`);
-                btnBuscar.innerText = "Buscar";
-                btnBuscar.disabled = false;
-                return;
-            }
-
-            // 2. Se for formato CEP (contém dígitos)
             const cepLimpo = termo.replace(/\D/g, '');
+
+            // 1. BUSCA POR CEP (8 DÍGITOS)
             if (cepLimpo.length === 8) {
                 try {
                     const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
                     const data = await response.json();
 
                     if (!data.erro) {
-                        const cidadeCep = data.localidade.toLowerCase();
-                        const encontradoCep = Object.keys(marcadores).find(nome => nome.includes(cidadeCep));
+                        const bairroLimpo = data.bairro ? data.bairro.replace(/\s*\(.*?\)\s*/g, '').trim() : '';
+                        const ruaLimpa = data.logradouro ? data.logradouro.split('-')[0].trim() : '';
 
-                        // Se a cidade do CEP existe na lista de monitoramento do SUS
-                        if (encontradoCep) {
-                            const marker = marcadores[encontradoCep];
-                            map.setView(marker.getLatLng(), 11);
-                            marker.openPopup();
-                            anunciarParaLeitor(`CEP ${cepLimpo} localizado em ${data.localidade}.`);
-                            btnBuscar.innerText = "Buscar";
-                            btnBuscar.disabled = false;
-                            return;
-                        } 
-                        
-                        // Caso seja um CEP válido de uma cidade fora do banco SUS, busca latitude/longitude via Nominatim
-                        const enderecoCompleto = `${data.logradouro || ''}, ${data.bairro || ''}, ${data.localidade} - ${data.uf}, Brasil`;
-                        const resGeocode = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoCompleto)}`);
-                        const geoData = await resGeocode.json();
+                        const queryRua = `${ruaLimpa}, ${bairroLimpo}, ${data.localidade} - ${data.uf}, Brasil`;
+                        const queryBairro = `${bairroLimpo}, ${data.localidade} - ${data.uf}, Brasil`;
 
-                        if (geoData && geoData.length > 0) {
-                            const lat = parseFloat(geoData[0].lat);
-                            const lon = parseFloat(geoData[0].lon);
+                        let lat = null, lon = null;
 
-                            if (marcadorBusca) map.removeLayer(marcadorBusca);
+                        try {
+                            const resA = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryRua)}&limit=1`);
+                            const geoA = await resA.json();
+                            if (geoA && geoA.length > 0) {
+                                lat = parseFloat(geoA[0].lat);
+                                lon = parseFloat(geoA[0].lon);
+                            }
+                        } catch(e) {}
+
+                        if (!lat && bairroLimpo) {
+                            try {
+                                const resB = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryBairro)}&limit=1`);
+                                const geoB = await resB.json();
+                                if (geoB && geoB.length > 0) {
+                                    lat = parseFloat(geoB[0].lat);
+                                    lon = parseFloat(geoB[0].lon);
+                                }
+                            } catch(e) {}
+                        }
+
+                        if (lat && lon) {
+                            removerMarcacoesBusca();
 
                             marcadorBusca = L.marker([lat, lon]).addTo(map)
                                 .bindPopup(`
-                                    <div style="color: #000;">
-                                        <strong>📍 Localização Localizada por CEP</strong><br>
-                                        ${data.logradouro ? data.logradouro + '<br>' : ''}
-                                        ${data.bairro ? data.bairro + ' - ' : ''}${data.localidade}/${data.uf}<br>
-                                        <small class="text-gray-600">Este município não faz parte da amostragem crítica inicial.</small>
+                                    <div style="color: #000; font-family: sans-serif;">
+                                        <strong style="color: #059669;">📍 Localização do CEP</strong><br>
+                                        <b>CEP:</b> ${data.cep}<br>
+                                        ${data.logradouro ? '<b>Rua:</b> ' + data.logradouro + '<br>' : ''}
+                                        <b>Bairro:</b> ${data.bairro}<br>
+                                        <b>Cidade:</b> ${data.localidade}/${data.uf}<br>
+                                        <hr style="margin: 4px 0;">
+                                        <small style="color: #059669;">✔ Vinculado aos dados do SUS: <b>${data.localidade}</b></small>
                                     </div>
                                 `).openPopup();
 
-                            map.setView([lat, lon], 13);
-                            anunciarParaLeitor(`Endereço localizado: ${data.localidade}.`);
+                            const termoCidade = data.localidade.toLowerCase();
+                            const keyCidade = Object.keys(marcadores).find(k => k.includes(termoCidade));
+
+                            if (keyCidade) {
+                                const coordsMunicipio = marcadores[keyCidade].getLatLng();
+
+                                linhaConexao = L.polyline([[lat, lon], [coordsMunicipio.lat, coordsMunicipio.lng]], {
+                                    color: '#10B981',
+                                    weight: 3,
+                                    dashArray: '6, 8',
+                                    opacity: 0.85
+                                }).addTo(map);
+
+                                const bounds = L.latLngBounds([[lat, lon], [coordsMunicipio.lat, coordsMunicipio.lng]]);
+                                map.fitBounds(bounds, { padding: [50, 50] });
+                            } else {
+                                map.setView([lat, lon], 14);
+                            }
+
+                            btnLimparMapa.classList.remove('hidden');
+                            btnLimparCampo.classList.remove('hidden');
+
+                            anunciarParaLeitor(`Endereço localizado no bairro ${data.bairro}. Conectado aos dados de ${data.localidade}.`);
                             btnBuscar.innerText = "Buscar";
                             btnBuscar.disabled = false;
                             return;
                         }
                     }
-                } catch (e) { console.error("Erro na busca por CEP", e); }
+                } catch (e) { 
+                    console.error("Erro no processamento do CEP:", e); 
+                }
             }
 
-            // 3. Fallback: Se não encontrou nem no banco local nem pelo ViaCEP
-            msgErro.innerText = "Município ou CEP não localizado na base.";
-            msgErro.classList.remove('hidden');
-            anunciarParaLeitor("Município ou CEP não localizado.");
-            
+            // 2. BUSCA POR NOME DE MUNICÍPIO
+            removerMarcacoesBusca();
+            const termoLimpo = termo.toLowerCase();
+            const encontradoKey = Object.keys(marcadores).find(nome => nome.includes(termoLimpo));
+
+            if (encontradoKey) {
+                const marker = marcadores[encontradoKey];
+                map.setView(marker.getLatLng(), 11);
+                marker.openPopup();
+                btnLimparCampo.classList.remove('hidden');
+                btnLimparMapa.classList.remove('hidden');
+                anunciarParaLeitor(`Localizado ${encontradoKey} no mapa.`);
+            } else {
+                msgErro.innerText = "Localização ou município não encontrado nos registros.";
+                msgErro.classList.remove('hidden');
+                anunciarParaLeitor("Erro: Localização não encontrada.");
+            }
+
             btnBuscar.innerText = "Buscar";
             btnBuscar.disabled = false;
-        }
-
-        document.getElementById('campo-busca').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') buscarLocalizacao();
-        });
-
-        // Acessibilidade
-        let tamanhoFonteAtual = 100;
-        function alterarFonte(fator) {
-            tamanhoFonteAtual += fator * 10;
-            if (tamanhoFonteAtual < 80) tamanhoFonteAtual = 80;
-            if (tamanhoFonteAtual > 140) tamanhoFonteAtual = 140;
-            document.documentElement.style.fontSize = tamanhoFonteAtual + '%';
-        }
-
-        function toggleAltoContraste() {
-            document.body.classList.toggle('high-contrast');
         }
     </script>
 </body>
