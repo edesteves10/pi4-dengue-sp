@@ -1,8 +1,19 @@
+import joblib
+import numpy as np
+from datetime import datetime
 from flask import Flask, render_template, jsonify
 import pandas as pd
 from sklearn.cluster import KMeans
 
 app = Flask(__name__)
+
+# Tenta carregar o modelo preditivo previamente treinado
+try:
+    modelo_preditivo = joblib.load('modelo_dengue_preditivo.pkl')
+    print("✅ Modelo preditivo Random Forest carregado com sucesso!")
+except Exception as e:
+    modelo_preditivo = None
+    print(f"⚠️ Aviso: Modelo preditivo não encontrado ({e}). Usando fallback.")
 
 def carregar_e_processar_dados():
     # Estrutura de dados epidemiológicos
@@ -25,7 +36,7 @@ def carregar_e_processar_dados():
     df['incidencia_100k'] = (df['casos_notificados'] / df['populacao']) * 100000
     df['incidencia_100k'] = df['incidencia_100k'].round(2)
     
-    # Machine Learning - K-Means
+    # Machine Learning - K-Means (Classificação Atual)
     X = df[['incidencia_100k']]
     kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
     df['cluster'] = kmeans.fit_predict(X)
@@ -44,6 +55,7 @@ def index():
 @app.route('/api/dados')
 def api_dados():
     df = carregar_e_processar_dados()
+    mes_atual = datetime.now().month
     
     # Cálculo das Métricas Gerais
     total_casos = int(df['casos_notificados'].sum())
@@ -55,17 +67,52 @@ def api_dados():
         'incidencia': float(municipio_critico_row['incidencia_100k'])
     }
     
-    # Retorna tanto a lista de municípios quanto o resumo executivo de métricas
-    resposta = {
-        'municipios': df.to_dict(orient='records'),
+    # Processamento Preditivo para cada município
+    dados_municipios = []
+    lista_registros = df.to_dict(orient='records')
+
+    for item in lista_registros:
+        taxa_atual = item['incidencia_100k']
+        
+        if modelo_preditivo:
+            # Puxa os dados históricos (ou aproximação baseada na taxa atual)
+            lag1 = item.get('incidencia_lag_1', taxa_atual)
+            lag2 = item.get('incidencia_lag_2', taxa_atual)
+            
+            X_input = np.array([[taxa_atual, lag1, lag2, mes_atual]])
+            previsao = float(modelo_preditivo.predict(X_input)[0])
+        else:
+            previsao = taxa_atual * 1.05  # Fallback simulado se o .pkl não estiver carregado
+
+        # Lógica de Tendência Preditiva
+        diferenca = previsao - taxa_atual
+        if diferenca > 40:
+            tendencia = "Alta Severa 📈"
+        elif diferenca > 10:
+            tendencia = "Aumento Moderado ↗️"
+        else:
+            tendencia = "Estável / Queda ↘️"
+
+        dados_municipios.append({
+            'municipio': item['municipio'],
+            'lat': item['lat'],
+            'lon': item['lon'],
+            'casos_notificados': item['casos_notificados'],
+            'incidencia_100k': taxa_atual,
+            'nivel_risco': item['nivel_risco'],
+            'incidencia_prevista_100k': round(max(0, previsao), 2),
+            'tendencia': tendencia
+        })
+    
+    # Retorna o JSON unificado com K-Means + Previsão Random Forest
+    return jsonify({
+        'municipios': dados_municipios,
         'metricas': {
             'total_casos': total_casos,
             'media_incidencia': media_incidencia,
             'municipio_critico': municipio_critico
         }
-    }
-    
-    return jsonify(resposta)
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
