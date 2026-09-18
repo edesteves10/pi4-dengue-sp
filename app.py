@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from flask import Flask, render_template, jsonify
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -14,6 +15,16 @@ try:
 except Exception as e:
     modelo_preditivo = None
     print(f"⚠️ Aviso: Modelo preditivo não encontrado ({e}). Usando fallback epidemiológico.")
+
+def obter_rotulos_temporais():
+    """Calcula automaticamente os nomes dos meses a partir da data atual do servidor"""
+    agora = datetime.now()
+    return {
+        "atual": agora.strftime("%b/%Y"),
+        "m1": (agora + relativedelta(months=1)).strftime("%b/%Y"),
+        "m2": (agora + relativedelta(months=2)).strftime("%b/%Y"),
+        "m3": (agora + relativedelta(months=3)).strftime("%b/%Y")
+    }
 
 def carregar_e_processar_dados():
     # Estrutura de dados epidemiológicos com histórico recente (lags) para alimentar o modelo
@@ -55,7 +66,10 @@ def index():
 @app.route('/api/dados')
 def api_dados():
     df = carregar_e_processar_dados()
-    mes_atual = datetime.now().month
+    
+    agora = datetime.now()
+    mes_atual = agora.month
+    rotulos_tempo = obter_rotulos_temporais()
     
     # Cálculo das Métricas Gerais
     total_casos = int(df['casos_notificados'].sum())
@@ -122,9 +136,17 @@ def api_dados():
             'tendencia': tendencia
         })
     
-    # Retorna o JSON unificado com K-Means + Previsão
+    # Retorna o JSON unificado com K-Means + Previsão e Rótulos Automáticos de Tempo
     return jsonify({
+        'rotulos_tempo': rotulos_tempo,
+        'dados_sus': dados_municipios,
+        'dados_treinamento': dados_municipios,
         'municipios': dados_municipios,
+        'metricas_sus': {
+            'total_casos': total_casos,
+            'media_incidencia': media_incidencia,
+            'municipio_critico': municipio_critico
+        },
         'metricas': {
             'total_casos': total_casos,
             'media_incidencia': media_incidencia,

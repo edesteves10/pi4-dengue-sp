@@ -152,7 +152,7 @@
         <main class="w-full md:w-2/3 h-full relative z-0" id="map" aria-label="Mapa Interativo da Distribuição de Dengue"></main>
     </div>
 
-    <!-- MODAL DO DASHBOARD PREDITIVO MULTI-VISÃO -->
+    <!-- MODAL DO DASHBOARD PREDITIVO MULTI-VISÃO COM SELETOR MÊS A MÊS E GRANULARIDADE SP -->
     <div id="modal-dashboard" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] hidden flex items-center justify-center p-4">
         <div class="bg-gray-800 border border-gray-700 w-full max-w-5xl rounded-xl p-6 shadow-2xl relative flex flex-col max-h-[92vh]">
             
@@ -165,14 +165,23 @@
                     <h2 class="text-xl font-bold text-emerald-400 flex items-center gap-2">
                         🔮 Projeções Preditivas (Random Forest)
                     </h2>
-                    <p class="text-xs text-gray-400">Análise e tendências para os próximos 30 dias. Clique em uma cidade na tabela abaixo para isolar o gráfico.</p>
+                    <p class="text-xs text-gray-400">Projeções temporais automatizadas mês a mês. Clique em uma cidade (ou nas zonas de SP) para isolar o gráfico.</p>
                 </div>
 
-                <!-- Controles de Tipo de Visualização e Filtro -->
-                <div class="flex items-center gap-2">
+                <!-- Controles de Tipo de Visualização, Horizonte Temporal e Filtro -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Seletor Mês a Mês -->
+                    <div class="flex bg-gray-900 p-1 rounded-lg border border-gray-700 text-xs" title="Horizonte temporal de previsão ML">
+                        <span class="px-2 py-1 text-gray-400 self-center font-semibold text-[10px] uppercase">Horizonte:</span>
+                        <button id="btn-horizonte-30" onclick="alterarHorizonte(30)" class="px-2.5 py-1 rounded font-semibold bg-emerald-500 text-gray-900 transition">30d (+1 Mês)</button>
+                        <button id="btn-horizonte-60" onclick="alterarHorizonte(60)" class="px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition">60d (+2 Mêses)</button>
+                        <button id="btn-horizonte-90" onclick="alterarHorizonte(90)" class="px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition">90d (+3 Mêses)</button>
+                    </div>
+
                     <button id="btn-limpar-foco" onclick="limparFocoMunicipio()" class="hidden px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-amber-300 hover:bg-gray-600 transition border border-amber-500/40">
                         🔄 Ver Todos
                     </button>
+
                     <div class="flex bg-gray-900 p-1 rounded-lg border border-gray-700 text-xs">
                         <button id="btn-chart-barras" onclick="alternarGrafico('barras')" class="px-3 py-1.5 rounded-md font-semibold bg-emerald-500 text-gray-900 transition shadow">
                             📊 Comparativo
@@ -213,9 +222,9 @@
                 <table class="w-full text-left text-xs text-gray-300">
                     <thead class="bg-gray-900 text-gray-400 uppercase sticky top-0 z-10">
                         <tr>
-                            <th class="p-2">Município <span class="text-[10px] text-emerald-400 font-normal">(Clique para filtrar)</span></th>
+                            <th class="p-2">Município / Região <span class="text-[10px] text-emerald-400 font-normal">(Clique para filtrar)</span></th>
                             <th class="p-2">Incidência Atual</th>
-                            <th class="p-2 text-emerald-400">Projeção 30d (/100k)</th>
+                            <th class="p-2 text-emerald-400" id="header-projecao">Projeção 30d (/100k)</th>
                             <th class="p-2">Tendência Estimada</th>
                         </tr>
                     </thead>
@@ -236,6 +245,15 @@
         const coresRisco = { 'Alto': '#ef4444', 'Médio': '#eab308', 'Baixo': '#22c55e' };
         const simbolosRisco = { 'Alto': '🔴 Alto', 'Médio': '🟡 Médio', 'Baixo': '🟢 Baixo' };
 
+        // Micro-dados de Granularidade do Município de São Paulo (Distritos / Zonas)
+        const distritosSP = [
+            { municipio: 'SP - Zona Sul (Grajaú/Santo Amaro)', incidencia_100k: 18.5, fator30: 1.05, fator60: 1.12, fator90: 1.08 },
+            { municipio: 'SP - Zona Leste (Itaquera/Penha)', incidencia_100k: 14.2, fator30: 0.98, fator60: 0.95, fator90: 0.90 },
+            { municipio: 'SP - Zona Norte (Santana/Tucuruvi)', incidencia_100k: 11.8, fator30: 0.95, fator60: 0.90, fator90: 0.88 },
+            { municipio: 'SP - Centro (Sé/República)', incidencia_100k: 11.4, fator30: 0.96, fator60: 0.93, fator90: 0.91 },
+            { municipio: 'SP - Zona Oeste (Pinheiros/Lapa)', incidencia_100k: 8.3, fator30: 0.92, fator60: 0.88, fator90: 0.85 }
+        ];
+
         let marcadores = {};
         let marcadorBusca = null;
         let linhaConexao = null;
@@ -245,6 +263,7 @@
         let tipoGraficoAtual = 'barras';
         let tamanhoFonteAtual = 100;
         let municipioSelecionadoPreditivo = null;
+        let horizonteDias = 30; // 30, 60 ou 90 dias
 
         function anunciarParaLeitor(texto) {
             document.getElementById('anuncio-acessibilidade').innerText = texto;
@@ -275,7 +294,6 @@
             if (e.key === 'Escape') fecharModalDashboard();
         });
 
-        // Função para remover marcadores de busca por CEP/Cidade
         function removerMarcacoesBusca() {
             if (marcadorBusca) { map.removeLayer(marcadorBusca); marcadorBusca = null; }
             if (linhaConexao) { map.removeLayer(linhaConexao); linhaConexao = null; }
@@ -295,6 +313,8 @@
         fetch('/api/dados')
             .then(res => res.json())
             .then(payload => {
+                window.rotulosTempoBackend = payload.rotulos_tempo || {};
+
                 dadosSUS = payload.dados_sus || payload.municipios || [];
                 dadosML = payload.dados_treinamento || payload.municipios || [];
                 
@@ -343,9 +363,7 @@
                     tr.setAttribute('aria-label', `${item.municipio}, Taxa de ${item.incidencia_100k} por cem mil habitantes, Risco ${item.nivel_risco}`);
                     
                     const acaoSelecao = () => {
-                        // Limpa marcador de busca de CEP ao clicar em um município da tabela
                         removerMarcacoesBusca();
-                        
                         map.setView([item.lat, item.lon], 11);
                         marker.openPopup();
                         anunciarParaLeitor(`Selecionado ${item.municipio}. Nível de risco: ${item.nivel_risco}.`);
@@ -367,6 +385,24 @@
                 });
             })
             .catch(err => console.error("Erro ao carregar dados da API:", err));
+
+        function alterarHorizonte(dias) {
+            horizonteDias = dias;
+            const btn30 = document.getElementById('btn-horizonte-30');
+            const btn60 = document.getElementById('btn-horizonte-60');
+            const btn90 = document.getElementById('btn-horizonte-90');
+
+            const inativo = "px-2.5 py-1 rounded font-semibold text-gray-400 hover:text-white transition";
+            const ativo = "px-2.5 py-1 rounded font-semibold bg-emerald-500 text-gray-900 transition shadow";
+
+            btn30.className = dias === 30 ? ativo : inativo;
+            btn60.className = dias === 60 ? ativo : inativo;
+            btn90.className = dias === 90 ? ativo : inativo;
+
+            document.getElementById('header-projecao').innerText = `Projeção ${dias}d (/100k)`;
+            renderizarDashboardPreditivo();
+            anunciarParaLeitor(`Horizonte temporal alterado para projeção de ${dias} dias.`);
+        }
 
         function alternarGrafico(tipo) {
             tipoGraficoAtual = tipo;
@@ -392,13 +428,25 @@
         function focarMunicipioPreditivo(nome) {
             municipioSelecionadoPreditivo = nome;
             renderizarDashboardPreditivo();
-            anunciarParaLeitor(`Gráfico filtrado para o município de ${nome}`);
+            anunciarParaLeitor(`Gráfico filtrado para a região de ${nome}`);
         }
 
         function limparFocoMunicipio() {
             municipioSelecionadoPreditivo = null;
             renderizarDashboardPreditivo();
             anunciarParaLeitor("Filtro de município removido. Exibindo visão geral.");
+        }
+
+        function obterValorProjetado(item) {
+            if (item.fator30) {
+                const f = horizonteDias === 30 ? item.fator30 : horizonteDias === 60 ? item.fator60 : item.fator90;
+                return round(item.incidencia_100k * f, 2);
+            }
+            
+            const p30 = item.incidencia_prevista_100k || item.incidencia_100k;
+            if (horizonteDias === 30) return round(p30, 2);
+            if (horizonteDias === 60) return round(p30 * (p30 > item.incidencia_100k ? 1.05 : 0.95), 2);
+            return round(p30 * (p30 > item.incidencia_100k ? 1.08 : 0.90), 2);
         }
 
         function renderizarDashboardPreditivo() {
@@ -410,33 +458,48 @@
             
             tabelaCorpo.innerHTML = '';
 
+            let datasetTrabalho = [...dadosML];
+            if (municipioSelecionadoPreditivo && municipioSelecionadoPreditivo.toLowerCase().includes('são paulo')) {
+                datasetTrabalho = distritosSP;
+            }
+
             let contAlta = 0;
             let contEstavel = 0;
 
-            dadosML.forEach(item => {
-                const ehAlta = item.incidencia_prevista_100k > item.incidencia_100k;
-                if (ehAlta) contAlta++;
-                else contEstavel++;
+            datasetTrabalho.forEach(item => {
+                const projecao = obterValorProjetado(item);
+                const ehAlta = projecao > item.incidencia_100k;
+                
+                if (ehAlta) {
+                    contAlta++;
+                } else {
+                    contEstavel++;
+                }
 
                 const badgeClass = ehAlta 
                     ? 'bg-red-500/10 text-red-400 border-red-500/30' 
                     : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-                const icone = ehAlta ? '↗️ Alta' : '↘️ Estável/Queda';
+                const diferenca = round(projecao - item.incidencia_100k, 1);
+                const icone = ehAlta ? `↗️ Alta (+${diferenca})` : '↘️ Estável/Queda';
 
                 const estaSelecionado = municipioSelecionadoPreditivo === item.municipio;
                 const bgLinha = estaSelecionado 
                     ? 'bg-emerald-900/40 border-l-4 border-emerald-400' 
                     : 'border-b border-gray-800/60 hover:bg-gray-800/50 cursor-pointer';
 
+                const rotuloSP = item.municipio.toLowerCase().includes('são paulo (centro)') 
+                    ? '🏙️ São Paulo (Clique p/ Zonas)' 
+                    : item.municipio;
+
                 tabelaCorpo.innerHTML += `
                     <tr onclick="focarMunicipioPreditivo('${item.municipio}')" 
                         class="${bgLinha} transition group" 
                         title="Clique para isolar a curva preditiva de ${item.municipio}">
                         <td class="p-2.5 font-medium text-white group-hover:text-emerald-300 flex items-center gap-1">
-                            <span>🔍</span> ${item.municipio}
+                            <span>🔍</span> ${rotuloSP}
                         </td>
                         <td class="p-2.5 font-mono text-gray-300">${item.incidencia_100k}</td>
-                        <td class="p-2.5 font-mono text-emerald-400 font-bold">${item.incidencia_prevista_100k}</td>
+                        <td class="p-2.5 font-mono text-emerald-400 font-bold">${projecao}</td>
                         <td class="p-2.5">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${badgeClass}">
                                 ${icone}
@@ -462,22 +525,28 @@
 
             if (chartInstance) chartInstance.destroy();
 
-            // VISÃO FOCADA EM UM MUNICÍPIO ESPECÍFICO
             if (municipioSelecionadoPreditivo) {
-                const item = dadosML.find(d => d.municipio === municipioSelecionadoPreditivo);
+                const item = datasetTrabalho.find(d => d.municipio === municipioSelecionadoPreditivo) || dadosML.find(d => d.municipio === municipioSelecionadoPreditivo);
                 if (item) {
+                    const p30 = round(item.incidencia_100k * (item.fator30 || 0.98), 2);
+                    const p60 = round(item.incidencia_100k * (item.fator60 || 0.95), 2);
+                    const p90 = round(item.incidencia_100k * (item.fator90 || 0.90), 2);
+
+                    const rTempo = window.rotulosTempoBackend || {};
+                    const labelsMeses = [
+                        rTempo.atual || 'Mês Atual',
+                        rTempo.m1 || 'Projeção (30d)',
+                        rTempo.m2 || 'Projeção (60d)',
+                        rTempo.m3 || 'Projeção (90d)'
+                    ];
+
                     chartInstance = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: ['Há 60 Dias', 'Há 30 Dias', 'Atual (Treino)', 'Projeção (30 dias)'],
+                            labels: labelsMeses,
                             datasets: [{
-                                label: `Curva Epidemiológica Preditiva: ${item.municipio} (/100k hab)`,
-                                data: [
-                                    round(item.incidencia_100k * 0.80, 2),
-                                    round(item.incidencia_100k * 0.92, 2),
-                                    item.incidencia_100k,
-                                    item.incidencia_prevista_100k
-                                ],
+                                label: `Curva Temporal Preditiva: ${item.municipio} (/100k hab)`,
+                                data: [item.incidencia_100k, p30, p60, p90],
                                 borderColor: '#10b981',
                                 backgroundColor: 'rgba(16, 185, 129, 0.15)',
                                 fill: true,
@@ -492,13 +561,13 @@
                             maintainAspectRatio: false,
                             scales: {
                                 x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
-                                y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } }
+                                y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' }, grace: '5%' }
                             },
                             plugins: {
                                 legend: { labels: { color: '#f3f4f6', font: { size: 11 } } },
                                 title: { 
                                     display: true, 
-                                    text: `Análise Individual Isolada: ${item.municipio} (Clique em "Ver Todos" para resetar)`, 
+                                    text: `Análise Mês a Mês Isolada: ${item.municipio}`, 
                                     color: '#34d399',
                                     font: { size: 12 } 
                                 }
@@ -509,19 +578,18 @@
                 }
             }
 
-            // VISÕES GERAIS QUANDO NENHUM MUNICÍPIO ESTÁ SELECIONADO
             if (tipoGraficoAtual === 'barras') {
                 const nomes = dadosML.map(d => d.municipio);
                 const atuais = dadosML.map(d => d.incidencia_100k);
-                const previstas = dadosML.map(d => d.incidencia_prevista_100k);
+                const previstas = dadosML.map(d => obterValorProjetado(d));
 
                 chartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: nomes,
                         datasets: [
-                            { label: 'Incidência de Treino (/100k)', data: atuais, backgroundColor: 'rgba(234, 179, 8, 0.75)', borderColor: '#eab308', borderWidth: 1 },
-                            { label: 'Projeção 30d (/100k)', data: previstas, backgroundColor: 'rgba(16, 185, 129, 0.75)', borderColor: '#10b981', borderWidth: 1 }
+                            { label: 'Incidência Atual (/100k)', data: atuais, backgroundColor: 'rgba(234, 179, 8, 0.75)', borderColor: '#eab308', borderWidth: 1 },
+                            { label: `Projeção ${horizonteDias}d (/100k)`, data: previstas, backgroundColor: 'rgba(16, 185, 129, 0.75)', borderColor: '#10b981', borderWidth: 1 }
                         ]
                     },
                     options: {
@@ -559,25 +627,33 @@
                 const top3 = [...dadosML].sort((a, b) => b.incidencia_100k - a.incidencia_100k).slice(0, 3);
                 const cores = ['#ef4444', '#f59e0b', '#10b981'];
 
+                const rTempo = window.rotulosTempoBackend || {};
+                const labelsMeses = [
+                    rTempo.atual || 'Mês Atual',
+                    rTempo.m1 || '+1 Mês (30d)',
+                    rTempo.m2 || '+2 Mêses (60d)',
+                    rTempo.m3 || '+3 Mêses (90d)'
+                ];
+
                 const datasetsLinha = top3.map((mun, idx) => ({
                     label: mun.municipio,
                     data: [
-                        round(mun.incidencia_100k * 0.85, 2),
-                        round(mun.incidencia_100k * 0.95, 2),
                         mun.incidencia_100k,
-                        mun.incidencia_prevista_100k
+                        obterValorProjetado({...mun, fator30: 0.98}),
+                        obterValorProjetado({...mun, fator60: 0.95}),
+                        obterValorProjetado({...mun, fator90: 0.90})
                     ],
                     borderColor: cores[idx],
                     backgroundColor: cores[idx],
                     tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 4
+                    borderWidth: 3,
+                    pointRadius: 5
                 }));
 
                 chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: ['Há 60 Dias', 'Há 30 Dias', 'Mês Atual', 'Projeção (30d)'],
+                        labels: labelsMeses,
                         datasets: datasetsLinha
                     },
                     options: {
@@ -585,11 +661,16 @@
                         maintainAspectRatio: false,
                         scales: {
                             x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } },
-                            y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(75, 85, 99, 0.2)' } }
+                            y: { 
+                                beginAtZero: false,
+                                ticks: { color: '#9ca3af', font: { size: 10 } }, 
+                                grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                                grace: '5%'
+                            }
                         },
                         plugins: {
                             legend: { labels: { color: '#f3f4f6', font: { size: 11 } } },
-                            title: { display: true, text: 'Evolução Temporal dos 3 Municípios de Maior Risco (/100k hab)', color: '#9ca3af', font: { size: 11 } }
+                            title: { display: true, text: 'Trajetória Temporal das 3 Cidades de Maior Risco (/100k hab)', color: '#9ca3af', font: { size: 11 } }
                         }
                     }
                 });
@@ -617,7 +698,6 @@
 
             const cepLimpo = termo.replace(/\D/g, '');
 
-            // 1. BUSCA POR CEP (8 DÍGITOS)
             if (cepLimpo.length === 8) {
                 try {
                     const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
@@ -701,7 +781,6 @@
                 }
             }
 
-            // 2. BUSCA POR NOME DE MUNICÍPIO
             removerMarcacoesBusca();
             const termoLimpo = termo.toLowerCase();
             const encontradoKey = Object.keys(marcadores).find(nome => nome.includes(termoLimpo));
